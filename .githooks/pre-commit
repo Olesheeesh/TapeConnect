@@ -1,0 +1,41 @@
+#!/bin/sh
+# Pre-commit guard for TapeConnect - this repo is meant to hold ONLY the
+# MT5 Expert Advisor, nothing about any server. Blocks accidental commits
+# of a real IP address or anything credential-shaped, since this repo is
+# public.
+#
+# Enable once per clone with:
+#   git config core.hooksPath .githooks
+#
+# Blocks the commit (does not touch anything) on two patterns in ADDED
+# lines only: anything IP-address-shaped (excluding the always-safe
+# 127.0.0.1/0.0.0.0), and anything that looks like a credential
+# (api_key/token/secret/password assigned a long value). False positive?
+# Fix the line, or if you're certain, override with:
+#   git commit --no-verify
+
+staged=$(git diff --cached -U0 -- . ':(exclude).githooks')
+added=$(echo "$staged" | grep -E '^\+[^+]')
+
+ip_regex='([0-9]{1,3}\.){3}[0-9]{1,3}'
+ip_hits=$(echo "$added" | grep -E "$ip_regex" | grep -vE '127\.0\.0\.1|0\.0\.0\.0')
+if [ -n "$ip_hits" ]; then
+  echo "BLOCKED: staged changes contain what looks like a real IP address:"
+  echo "$ip_hits"
+  echo ""
+  echo "This is a public repo - a real server IP must never be committed here."
+  echo "If this is a false positive, review it, then override with: git commit --no-verify"
+  exit 1
+fi
+
+secret_regex='(api[_-]?key|api[_-]?token|access[_-]?token|secret|password)[[:space:]]*[:=][[:space:]]*["'"'"']?[A-Za-z0-9_./-]{8,}'
+secret_hits=$(echo "$added" | grep -iE "$secret_regex")
+if [ -n "$secret_hits" ]; then
+  echo "BLOCKED: staged changes look like they contain a credential:"
+  echo "$secret_hits"
+  echo ""
+  echo "Review it. If this is a false positive, override with: git commit --no-verify"
+  exit 1
+fi
+
+exit 0
